@@ -7,3 +7,5 @@ game.py is the backend logic
 playGame.py takes commands from player and plays the game
 
 To run: python3 playTetris.py
+
+Ingame: Q to quit, R to restart
