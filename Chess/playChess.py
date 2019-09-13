@@ -5,115 +5,147 @@ import math
 import time
 
 
-FPS = 30
-grid = 60
 
-game = Game(FPS,grid)
+grid = 60
+game = Game(grid)
 game.resetGame()
 
-# bishop = game.blackPieces[2]
 
-# game.boardState[2][1] = Rook(grid, "W", "Rook", "B", 6)
 
-# bishop.coord = ['B', 2]
-# xy = bishop.getXY()
-# bishop.x = xy[0]
-# bishop.y = xy[1]
-
-# print(bishop.pieceType, bishop.coord, bishop.colour)
-# bishop.isValidMove(game.boardState,'A',2)
-moving = False
-
-prevBoard = game.boardState
+row = 0
+col = 0
+piece = None
+offset_x = 0
+offset_y = 0
 
 
 
-while(game.running):
-    # print(currentPlayer)
-    keys = pygame.key.get_pressed()
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
+def main():
+
+    moving = False
+    while(game.running):
+
+        keys = pygame.key.get_pressed()
+        if (keys[pygame.K_q]):
             game.running = False
 
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            if event.button == 1:   
+        if (keys[pygame.K_r]):
+            game.resetGame()
 
-                if game.turn == 'black':
-                    pieces = game.blackPieces
-                else:
-                    pieces = game.whitePieces
-
-        #                 x = self.x + self.grid//2
-        # y = self.y + self.grid//2
-
-        # if coord != None:
-        #     self.coord = coord
-        #     return True
-
-        # # ignore outside border
-        # y -= self.grid//2 
-        # x -= self.grid//2
-
-        # # reduce to 1,2,3 ...
-        # y = y//self.grid
-        # x = x//self.grid
-
-        # newX = chr(ord('A') + x) # A
-        # newY = 8 - y # 1,2,3
-
-                clickX = event.pos[0]
-                clickY = event.pos[1]   
-
-                clickX += grid//2
-                clickY += grid//2
-
-                clickY //= grid
-                clickX //= grid           
-
-                coordX = clickY - 1
-                coordY = clickX - 1
-
-                print(coordX, coordY)
-
-                if coordX < 8 and coordX >= 0 and coordY < 8 and coordY >= 0:
-                    p = game.boardState[coordX][coordY]
-
-                    if p != None and ((game.turn == 'white' and p.colour == 'W') or \
-                        (game.turn == 'black' and p.colour == 'B')):
-                        game.playingPiece = p
-                        moving = True
-                        mouse_x, mouse_y = event.pos
-                        initialPosition = [p.x, p.y]
-                        offset_x = p.x - mouse_x
-                        offset_y = p.y - mouse_y
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                game.running = False
 
 
-        elif event.type == pygame.MOUSEBUTTONUP:
-            if event.button == 1 and moving:            
-                moving = False
-                prevBoard = game.boardState
-                if game.updateCoord(): # switch sides
+            if game.mode == "home":
+                homeAction(event)
+            elif game.mode == "1p":
+                gameAction(event, True) # single player
+            elif game.mode == "2p":
+                gameAction(event, False)
+            elif game.mode == "computer":
+                pass
 
-                    if game.turn == 'white':
-                        game.turn = 'black'
-                    else:
-                        game.turn = 'white'
-                else:
-                    game.playingPiece.x = initialPosition[0]
-                    game.playingPiece.y = initialPosition[1]
+        game.refresh()
 
-        elif event.type == pygame.MOUSEMOTION:
-            if moving:
+    print("DONE!")
+
+def gameAction(event, computer):
+
+    if event.type == pygame.MOUSEBUTTONDOWN:
+        global row, col, piece, offset_x, offset_y
+        
+
+        if event.button == 1:
+            
+            # get piece here
+            
+            clickX = event.pos[0]
+            clickY = event.pos[1]   
+
+            if clickX in range(37) and clickY in range(14):
+                game.resetGame()
+                game.mode = "home"
+                return
+
+
+            if (game.turn == "B"):
+                clickY = grid*9 - clickY
+
+            clickX += grid//2
+            clickY += grid//2
+
+            clickY //= grid
+            clickX //= grid           
+
+            row = clickY - 1
+            col = clickX - 1
+
+            piece = None
+            if (row >= 0 and row < 8 and col >= 0 and col < 8):
+                piece = game.board[row][col]
+
+            if piece != None and piece.colour == game.turn:
+                moving = True
+                game.movingPiece = piece
                 mouse_x, mouse_y = event.pos
-                game.playingPiece.x = mouse_x + offset_x
-                game.playingPiece.y = mouse_y + offset_y
+                
 
-    if keys[pygame.K_q]:
-        game.running = False
+                offset_x = piece.x - mouse_x
+                offset_y = piece.y - mouse_y
 
-    if keys[pygame.K_r]:
-        game.resetGame()
+                if (game.turn == 'B'):
+                    offset_y = grid*9 - piece.y - mouse_y
 
-    game.refresh()    
+    elif event.type == pygame.MOUSEBUTTONUP:
+        if event.button == 1:            
+            
+            if (game.movingPiece != None):
+                newRow, newCol = piece.fit()
+                
+                # check the move is valid   
 
-# - end -
+                if (game.move(row, col, newRow, newCol)):
+                    if computer:
+                        game.computerMove()
+                else:
+                    piece.reset()
+
+        game.movingPiece = None
+        moving = False
+            
+
+    elif event.type == pygame.MOUSEMOTION:
+        if game.movingPiece != None:
+            mouse_x, mouse_y = event.pos
+
+
+            piece.x = mouse_x + offset_x
+            piece.y = mouse_y + offset_y
+            if (game.turn == 'B'):
+                piece.y = grid*9 - piece.y
+
+
+def homeAction(event):
+    # 193, 137
+    if event.type == pygame.MOUSEBUTTONDOWN:
+
+        if event.button == 1: # left click only
+            x,y = event.pos[0], event.pos[1]
+
+            if x in range(grid*3, grid*6):
+                if y in range(grid*2, grid*3):
+                    print("1p")
+                    game.mode = "1p"
+
+                elif y in range(grid*4, grid*5):
+                    print('2p')
+                    game.mode = "2p"
+
+                elif y in range(grid*6, grid*7):
+                    print('custom')
+                    #game.mode = "custom"
+
+
+if __name__ == '__main__':
+    main()

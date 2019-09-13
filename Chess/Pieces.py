@@ -1,40 +1,254 @@
 import pygame
+from abc import ABC, abstractmethod
 
-class Piece():
 
-    def __init__(self, grid, colour, pieceType, x, y):
-        self.colour = colour # W or B
-        self.pieceType = pieceType # Bishop, Knight etc
-        self.coord = [x,y] # [A,1], [C,3] .. etc
-        self.grid = grid
-        xy = self.getXY()
+class Piece(ABC):
 
-        self.x = xy[0]
-        self.y = xy[1]
-        self.image = pygame.image.load(self.getName())
+    def __init__(self,board, row, col, colour):
+        self.board = board
+        self.colour = colour
+        self.row = row
+        self.col = col
 
-    def selected(self, coordinate, grid):
-        x = coordinate[0]
-        y = coordinate[1]
+        self.grid = 60
+        self.x = self.col*self.grid + self.grid//2
+        self.y = self.row*self.grid + self.grid//2
 
-        c = self.getXY()
+        self.moves = []
+        self.image = pygame.image.load(self.imageName())
 
-        if x not in range (self.x, self.x + self.grid):
+
+
+
+    def validCoord(self, row, col):
+
+        if row < 0 or row > 7:
             return False
 
-        if y not in range(self.y, self.y + self.grid):
+        if col < 0 or col > 7:
             return False
 
         return True
 
-    def getXY(self):
+    @abstractmethod 
+    def imageName(self):
+        pass
 
-        x = (ord(self.coord[0]) - ord('A'))*self.grid + self.grid//2
-        y = (8 - self.coord[1]) * self.grid + self.grid//2
 
-        return [x,y]
+    @abstractmethod
+    def getMoves(self, king, coord = None):
+        pass
 
-    def getName(self):
+    def draw(self, grid, window, perspective):
+        if perspective == "W":
+            window.blit(self.image, (self.x, self.y, grid, grid))
+        else:
+            window.blit(self.image, (self.x, grid*8 - self.y, grid, grid))
+
+    # adjusts to the correct square after dragging and dropping
+    def fit(self):
+
+        row = (self.y)//self.grid
+        col = (self.x)//self.grid
+
+        if (row < 0):
+            row = 0
+
+        if col < 0:
+            col = 0
+
+        if row > 7:
+            row = 7
+
+        if col > 7:
+            col = 7
+
+        return row,col
+
+    def reset(self):
+        self.x = self.col*self.grid + self.grid//2
+        self.y = self.row*self.grid + self.grid//2   
+
+    def moveTo(self, newRow, newCol):
+
+        self.board[self.row][self.col] = None
+        
+        self.row = newRow
+        self.col = newCol
+
+        self.board[self.row][self.col] = self
+        
+        self.x = self.col*self.grid + self.grid//2
+        self.y = self.row*self.grid + self.grid//2   
+
+
+class Pawn(Piece):
+    def __init__(self,board, row, col, colour):
+        Piece.__init__(self,board,row,col,colour)
+        self.starting = True
+        self.enPassant = False
+
+
+
+    def getMoves(self, king, coord = None):
+        result = []
+        direction = 1
+        temp = None
+
+
+        if coord == None:
+            row = self.row
+            col = self.col
+        else:
+            row = coord[0]
+            col = coord[1]
+            temp = self.board[row][col]
+            self.board[self.row][self.col] = None
+            self.board[row][col] = self
+
+
+
+        if (self.colour == "W"):
+            direction = -1
+
+        if row + direction >= 0 and row + direction <= 7: 
+
+            newRow = row + direction
+            newCol = col
+            
+            piece = self.board[newRow][newCol]
+            if piece == None:
+
+                # make sure king is not in check here 
+
+                self.board[newRow][newCol] = self
+                self.board[self.row][self.col] = None
+
+
+
+                if not (king.inCheck(king.row, king.col)):
+                    result.append((newRow, newCol)) 
+
+
+
+                self.board[self.row][self.col] = self
+                self.board[newRow][newCol] = piece
+
+                # self.board[self.row][self.col] = self
+        
+
+        if (self.starting and self.board[row + 2*direction][col] == None):
+
+            self.board[row + 2*direction][col] = self
+            self.board[self.row][self.col] = None
+
+            if not (king.inCheck(king.row, king.col)):
+                result.append((row + 2*direction, col)) 
+
+            self.board[self.row][self.col] = self
+            self.board[row + 2*direction][col] = None
+
+
+        # check captures
+        captures = [[direction, -1], [direction, 1]]
+
+        for capture in captures:
+            newRow = row + capture[0]
+            newCol = col + capture[1]
+
+            if not self.validCoord(newRow,newCol):
+                continue
+
+            piece = self.board[newRow][newCol]
+            if self.board[newRow][newCol] != None and self.board[newRow][newCol].colour != self.colour:
+
+                self.board[newRow][newCol] = self
+                self.board[self.row][self.col] = None
+
+                if not (king.inCheck(king.row, king.col)):
+                    result.append((newRow, newCol)) 
+
+                self.board[self.row][self.col] = self
+                self.board[newRow][newCol] = piece             
+
+
+        # handle enpassant
+        captures = [[0,1],[0,-1]]
+
+        for capture in captures:
+            newRow = row + capture[0]
+            newCol = col + capture[1]
+
+            if not self.validCoord(newRow,newCol):
+                continue
+
+            piece = self.board[newRow][newCol]
+            if (piece != None and isinstance(piece, Pawn) and piece.colour != self.colour):
+                if (self.colour == 'W' and self.row == 3) or (self.colour == 'B' and self.row == 4):
+                    if (piece.enPassant):
+
+
+                        self.board[newRow][newCol] = self
+                        self.board[self.row][self.col] = None
+
+                        if not (king.inCheck(king.row, king.col)):
+                            result.append((newRow + direction, newCol)) 
+
+                        self.board[self.row][self.col] = self
+                        self.board[newRow][newCol] = piece     
+
+        if coord != None:
+            self.board[self.row][self.col] = self
+            self.board[row][col] = temp
+        return result
+
+    def moveTo(self, newRow, newCol):
+    
+
+
+        self.board[self.row][self.col] = None
+        
+        self.row = newRow
+        self.col = newCol
+
+        capture = self.board[newRow][newCol]
+        if (self.board[self.row][self.col] == None):
+            # we enpassant here
+            direction = 1
+            if (self.colour == 'B'):
+                direction = -1
+
+            capture = self.board[self.row + direction][self.col]
+            self.board[self.row + direction][self.col] = None
+
+        if capture != None:
+            capture.row = -1
+            capture.col = -1
+
+
+
+        self.board[self.row][self.col] = self
+        
+        self.x = self.col*self.grid + self.grid//2
+        self.y = self.row*self.grid + self.grid//2   
+
+
+     
+
+        if (self.starting and (self.row == 3 or self.row == 4)):
+            self.enPassant = True
+        else:
+            self.enPassant = False
+
+        self.starting = False
+
+
+
+        if (self.row == 0 or self.row == 7):
+            self.board[self.row][self.col] = Queen(self.board, self.row, self.col, self.colour)
+
+
+    def imageName(self):
         string = 'models/'
 
         if self.colour == 'W':
@@ -42,365 +256,582 @@ class Piece():
         else:
             string += 'black'
 
-        string += self.pieceType
+        string += 'Pawn'
         string += '.png'
         return string
 
-    def draw(self, grid, window):
-        # coord = self.getXY(grid)
-        window.blit(self.image, (self.x,self.y, grid, grid))
-
-
-class Pawn(Piece):
-    def __init__(self, grid, colour, pieceType, x, y):
-        Piece.__init__(self, grid, colour, pieceType, x, y)
-
-    def isValidMove(self, board, x, y):
-
-        coord = [0,0]
-        coord[1] = ord(self.coord[0]) - ord('A')
-        coord[0] = 8 - self.coord[1]
-
-        row = coord[0]
-        col = coord[1]
-
-        if self.colour == 'W': # white pawn
-
-            if board[row - 1][col] == None: # nothing in front of it
-
-                r = [chr(col + ord('A')), 8 - (row - 1)]   
-                if x == r[0] and y == r[1]:
-                    return True 
-
-                if row == 6 and board[row - 2][col] == None: # starting position and 2 moves ahead are empty
-                    r = [chr(col + ord('A')), 8 - (row - 2)]
-                    if x == r[0] and y == r[1]:
-                        return True
-            # taking diagonally
-            if (row > 0): # not last rank
-                if col + 1 < 8 and board[row - 1][col + 1] != None and board[row - 1][col + 1].colour == "B":
-                    r = [chr(col + 1 + ord('A')), 8 - (row - 1)]
-                    if x == r[0] and y == r[1]:
-                        return True
-
-
-                if col - 1 >= 0 and board[row - 1][col - 1] != None and board[row - 1][col - 1].colour == "B":
-                    r = [chr(col - 1 + ord('A')), 8 - (row - 1)]
-                    if x == r[0] and y == r[1]:
-                        return True
-        elif self.colour == 'B': # black pawn
-
-            if board[row + 1][col] == None: # nothing in front of it
-                # print('made it here')
-                r = [chr(col + ord('A')), 8 - (row + 1)] 
-                if x == r[0] and y == r[1]:
-                        return True
-
-                # print(row + 2, col, board[row + 1][col])
-                if row == 1 and board[row + 2][col] == None: # starting position and 2 moves ahead are empty
-                    # print("JDSKLF")
-                    r = [chr(col + ord('A')), 8 - (row + 2)]   
-                    if x == r[0] and y == r[1]:
-                        return True
-            if (row < 7): # not last rank
-                if col + 1 < 8 and board[row + 1][col + 1] != None and board[row + 1][col + 1].colour == "W":
-                    r = [chr(col + 1 + ord('A')), 8 - (row + 1)]   
-                    if x == r[0] and y == r[1]:
-                        return True
-                if col - 1 >= 0 and board[row + 1][col - 1] != None and board[row + 1][col - 1].colour == "W":
-                    r = [chr(col - 1 + ord('A')), 8 - (row + 1)]
-                    if x == r[0] and y == r[1]:
-                        return True
-        return False
-
-class Bishop(Piece):
-    def __init__(self, grid, colour, pieceType, x, y):
-        Piece.__init__(self, grid, colour, pieceType, x, y)
-
-    def isValidMove(self, board, x, y):
-        coord = [0,0]
-        coord[1] = ord(self.coord[0]) - ord('A')
-        coord[0] = 8 - self.coord[1]
-
-        row = coord[0] - 1
-        col = coord[1] + 1
-
-        while (row >= 0 and col < 8):
-
-            move = [0,0]
-            move[0] = chr(col + ord('A'))
-            move[1] = 8 - row
-
-            if (board[row][col] == None):    
-                if x == move[0] and y == move[1]:
-                    return True
-            elif (board[row][col].colour != self.colour):
-                if x == move[0] and y == move[1]:
-                    return True
-                break
-            else:
-                break
-
-            row -= 1
-            col += 1
-
-        row = coord[0] + 1
-        col = coord[1] + 1
-
-        while (row < 8 and col < 8):
-            move = [0,0]
-            move[0] = chr(col + ord('A'))
-            move[1] = 8 - row
-            if (board[row][col] == None):    
-                if x == move[0] and y == move[1]:
-                    return True
-            elif (board[row][col].colour != self.colour):
-                if x == move[0] and y == move[1]:
-                    return True
-                break
-            else:
-                break
-
-            row += 1
-            col += 1
-
-        row = coord[0] - 1
-        col = coord[1] - 1
-        while (row >= 0 and col >= 0):
-            move = [0,0]
-            move[0] = chr(col + ord('A'))
-            move[1] = 8 - row
-            if (board[row][col] == None):    
-                if x == move[0] and y == move[1]:
-                    return True
-            elif (board[row][col].colour != self.colour):
-                if x == move[0] and y == move[1]:
-                    return True
-                break
-            else:
-                break
-
-            row -= 1
-            col -= 1
-
-        row = coord[0] + 1
-        col = coord[1] - 1
-        while (row < 8 and col >= 0):
-            move = [0,0]
-            move[0] = chr(col + ord('A'))
-            move[1] = 8 - row
-            if (board[row][col] == None):    
-                if x == move[0] and y == move[1]:
-                    return True
-            elif (board[row][col].colour != self.colour):
-                if x == move[0] and y == move[1]:
-                    return True
-                break
-            else:
-                break
-
-            row += 1
-            col -= 1
-
-        return False
+    def __str__(self):
+        return self.colour + " pn"
 
 class Knight(Piece):
-    def __init__(self, grid, colour,pieceType, x, y):
-        Piece.__init__(self, grid, colour, pieceType, x, y)
+    def __init__(self,board, row, col, colour):
+        Piece.__init__(self,board,row,col,colour)
 
+    def imageName(self):
+        string = 'models/'
 
-    def isValidMove(self, board, x, y):
-        coord = [0,0]
-        coord[1] = ord(self.coord[0]) - ord('A')
-        coord[0] = 8 - self.coord[1]
+        if self.colour == 'W':
+            string += 'white'
+        else:
+            string += 'black'
 
-        results = []
+        string += 'Knight'
+        string += '.png'
+        return string
 
-        row = coord[0]
-        col = coord[1]
+    def getMoves(self, king, coord = None):
+        temp = None
+        if coord == None:
+            row = self.row
+            col = self.col
+        else:
+            row = coord[0]
+            col = coord[1]
+            self.board[self.row][self.col] = None
+            temp = self.board[row][col]
+            self.board[row][col] = self
 
+        if (row == None):
+            row = self.row
+
+        if (col == None):
+            col = self.col
+
+        result = []
         moves = [[1,2], [1,-2], [2,1], [2,-1], [-1,-2], [-2,-1], [-1,2], [-2,1]]
-        
-        for pair in moves:
-            row = coord[0] + pair[0]
-            col = coord[1] + pair[1]
+        for move in moves:
+            newRow = row + move[0]
+            newCol = col + move[1]
+
+            # if newRow < 0 or newRow >= 7:
+            #     continue
+
+            # if newCol < 0 or newCol >= 7:
+            #     continue
+            if not (self.validCoord(newRow, newCol)):
+                continue
+
+            piece = self.board[newRow][newCol]
+            if piece == None or piece.colour != self.colour:
+
+                # make sure king is not in check here 
+                self.board[newRow][newCol] = self
+                self.board[self.row][self.col] = None
+
+                if not (king.inCheck(king.row, king.col)):
+                    result.append((newRow, newCol))
+
+                self.board[self.row][self.col] = self
+                self.board[newRow][newCol] = piece
 
 
-            move = [0,0]
-            move[0] = chr(col + ord('A'))
-            move[1] = 8 - row
-            if (row >= 0 and col >= 0 and row < 8 and col < 8):
-                if (board[row][col] == None):    
-                    if x == move[0] and y == move[1]:
-                        return True
-                elif (board[row][col].colour != self.colour):
-                    if x == move[0] and y == move[1]:
-                        return True
+        if coord != None:
+            self.board[self.row][self.col] = self
+            self.board[row][col] = temp
+        return result
 
-        return False
-
-
-
+    def __str__(self):
+        return self.colour + " kn"
 
 class Rook(Piece):
-    def __init__(self, grid, colour,pieceType, x, y):
-        Piece.__init__(self, grid, colour, pieceType, x, y)
+    def __init__(self,board, row, col, colour):
+        Piece.__init__(self,board,row,col,colour)
 
-    def isValidMove(self, board, x, y):
-        coord = [0,0]
-        coord[1] = ord(self.coord[0]) - ord('A')
-        coord[0] = 8 - self.coord[1]
+    def imageName(self):
+        string = 'models/'
 
+        if self.colour == 'W':
+            string += 'white'
+        else:
+            string += 'black'
 
-        row = coord[0] - 1
-        col = coord[1]
+        string += 'Rook'
+        string += '.png'
+        return string
 
-        results = []
+    def getMoves(self, king, coord = None):
+        temp = None
+        if coord == None:
+            row = self.row
+            col = self.col
+        else:
+            row = coord[0]
+            col = coord[1]
 
-        while (row >= 0):
-            move = [0,0]
-            move[0] = chr(col + ord('A'))
-            move[1] = 8 - row
-            if (board[row][col] == None):    
-                if x == move[0] and y == move[1]:
-                    return True
-            elif (board[row][col].colour != self.colour):
-                if x == move[0] and y == move[1]:
-                    return True
-                break
-            else:
-                break
+            temp = self.board[row][col]
 
-            row -= 1
-
-
-        row = coord[0] + 1
-        col = coord[1]
-
-        while (row < 8):
-            move = [0,0]
-            move[0] = chr(col + ord('A'))
-            move[1] = 8 - row
-            if (board[row][col] == None):    
-                if x == move[0] and y == move[1]:
-                    return True
-            elif (board[row][col].colour != self.colour):
-                if x == move[0] and y == move[1]:
-                    return True
-                break
-            else:
-                break
-
-            row += 1
+            self.board[self.row][self.col] = None
+            self.board[row][col] = self
 
 
-        row = coord[0]
-        col = coord[1] - 1
-        while (col >= 0):
-            move = [0,0]
-            move[0] = chr(col + ord('A'))
-            move[1] = 8 - row
-            if (board[row][col] == None):    
-                if x == move[0] and y == move[1]:
-                    return True
-            elif (board[row][col].colour != self.colour):
-                if x == move[0] and y == move[1]:
-                    return True
-                break
-            else:
-                break
+        if (row == None):
+            row = self.row
 
-            col -= 1
+        if (col == None):
+            col = self.col
 
-        row = coord[0]
-        col = coord[1] + 1
-        while (col < 8):
-            move = [0,0]
-            move[0] = chr(col + ord('A'))
-            move[1] = 8 - row
-            if (board[row][col] == None):    
-                if x == move[0] and y == move[1]:
-                    return True
-            elif (board[row][col].colour != self.colour):
-                if x == move[0] and y == move[1]:
-                    return True
-                break
-            else:
-                break
+        result = []
+        directions = [[0, 1], [0, -1], [1,0], [-1,0]]
 
-            col += 1
+        for direction in directions:
+            newRow = row
+            newCol = col
+            while (True):
+                newRow += direction[0]
+                newCol += direction[1]
             
-        return results
+                if not self.validCoord(newRow, newCol):
+                    break
+
+                piece = self.board[newRow][newCol]
+                if piece != None:
+                    if piece.colour != self.colour:
+
+                        # make sure king is not in check here 
+                        self.board[newRow][newCol] = self
+                        self.board[self.row][self.col] = None
+
+                        if not (king.inCheck(king.row, king.col)):
+                            result.append((newRow, newCol))
+
+                        self.board[self.row][self.col] = self
+                        self.board[newRow][newCol] = piece
+                    break
+                else:
+                    self.board[newRow][newCol] = self
+                    self.board[self.row][self.col] = None
+                    if not (king.inCheck(king.row, king.col)):
+                        result.append((newRow, newCol))                   
+                    self.board[self.row][self.col] = self
+                    self.board[newRow][newCol] = piece
+
+        if coord != None:
+            self.board[self.row][self.col] = self
+            self.board[row][col] = temp
+        return result
+        
+    def moveTo(self, newRow, newCol):
+
+        if self.row == 0 and self.col == 0: # black long
+
+            king = self.board[0][4]
+            if isinstance(king, King):
+                king.castleLong = False
+
+        elif self.row == 0 and self.col == 7: # black short
+
+            king = self.board[0][4]
+            if isinstance(king, King):
+                king.castleShort = False      
+
+        elif self.row == 7 and self.col == 0: # white long
+
+            king = self.board[7][4]
+            if isinstance(king, King):
+                king.castleLong = False
+
+        elif self.row == 7 and self.col == 7: # white short
+            king = self.board[7][4]
+            if isinstance(king, King):
+                king.castleShort = False        
+
+        self.board[self.row][self.col] = None
+            
+        self.row = newRow
+        self.col = newCol
+
+        self.board[self.row][self.col] = self
+        
+        self.x = self.col*self.grid + self.grid//2
+        self.y = self.row*self.grid + self.grid//2   
 
 
+    def __str__(self):
+        return self.colour + " rk"
+
+class Bishop(Piece):
+    def __init__(self,board, row, col, colour):
+        Piece.__init__(self,board,row,col,colour)
+
+    def imageName(self):
+        string = 'models/'
+
+        if self.colour == 'W':
+            string += 'white'
+        else:
+            string += 'black'
+
+        string += 'Bishop'
+        string += '.png'
+        return string
+
+    def getMoves(self, king, coord = None):
+        temp = None
+        if coord == None:
+            row = self.row
+            col = self.col
+        else:
+            row = coord[0]
+            col = coord[1]
+            self.board[self.row][self.col] = None
+            temp = self.board[row][col]
+            self.board[row][col] = self
+
+        if (row == None):
+            row = self.row
+
+        if (col == None):
+            col = self.col
+
+        result = []
+        directions = [[1, 1], [1, -1], [-1,1], [-1,-1]]
+
+        for direction in directions:
+            newRow = row
+            newCol = col
+            while (True):
+                newRow += direction[0]
+                newCol += direction[1]
+            
+                if not self.validCoord(newRow, newCol):
+                    break
+
+
+                piece = self.board[newRow][newCol]
+                if piece != None:
+                    if piece.colour != self.colour:
+
+                        # make sure king is not in check here 
+                        self.board[newRow][newCol] = self
+                        self.board[self.row][self.col] = None
+
+                        if not (king.inCheck(king.row, king.col)):
+                            result.append((newRow, newCol))
+
+                        self.board[self.row][self.col] = self
+                        self.board[newRow][newCol] = piece
+                    break
+                else:
+                    self.board[newRow][newCol] = self
+                    self.board[self.row][self.col] = None
+                    if not (king.inCheck(king.row, king.col)):
+                        result.append((newRow, newCol))                   
+                    self.board[self.row][self.col] = self
+                    self.board[newRow][newCol] = piece
+
+        if coord != None:
+            self.board[self.row][self.col] = self
+            self.board[row][col] = temp
+
+        return result
+
+    def __str__(self):
+        return self.colour + " bp"
 
 class Queen(Piece):
-    def __init__(self, grid, colour, pieceType, x, y):
-        Piece.__init__(self, grid, colour, pieceType, x, y)
+    def __init__(self,board, row, col, colour):
+        Piece.__init__(self,board,row,col,colour)
 
-    def isValidMove(self, board, x, y):
-        rook = Rook(self.grid, self.colour, "Rook", self.coord[0], self.coord[1])
-        bishop = Bishop(self.grid, self.colour, "Bishop", self.coord[0], self.coord[1])
+    def imageName(self):
+        string = 'models/'
 
-        if bishop.isValidMove(board, x,y):
-            return True
+        if self.colour == 'W':
+            string += 'white'
+        else:
+            string += 'black'
 
-        if rook.isValidMove(board,x,y):
-            return True        
-        # results.append(rook.getLegalMoves(board))
-        # results.append(bishop.getLegalMoves(board))
+        string += 'Queen'
+        string += '.png'
+        return string
 
-        return False
+    def getMoves(self, king, coord = None):
+        temp = None
+        if coord == None:
+            row = self.row
+            col = self.col
+        else:
+            row = coord[0]
+            col = coord[1]
+            self.board[self.row][self.col] = None
+            temp = self.board[row][col]
+            self.board[row][col] = self
+
+        if (row == None):
+            row = self.row
+
+        if (col == None):
+            col = self.col
+
+        result = []
+        directions = [[1, 1], [1, -1], [-1,1], [-1,-1], [0, 1], [0, -1], [1,0], [-1,0]]
+
+
+        for direction in directions:
+            newRow = row
+            newCol = col
+            while (True):
+                newRow += direction[0]
+                newCol += direction[1]
+            
+                if not self.validCoord(newRow, newCol):
+                    break
+
+                piece = self.board[newRow][newCol]
+                if piece != None:
+                    if piece.colour != self.colour:
+
+                        # make sure king is not in check here 
+                        self.board[newRow][newCol] = self
+                        self.board[self.row][self.col] = None
+
+                        if not (king.inCheck(king.row, king.col)):
+                            result.append((newRow, newCol))
+
+                        self.board[self.row][self.col] = self
+                        self.board[newRow][newCol] = piece
+                    break
+                else:
+                    self.board[newRow][newCol] = self
+                    self.board[self.row][self.col] = None
+                    if not (king.inCheck(king.row, king.col)):
+                        result.append((newRow, newCol))                   
+                    self.board[self.row][self.col] = self
+                    self.board[newRow][newCol] = piece
+
+        if coord != None:
+            self.board[self.row][self.col] = self
+            self.board[row][col] = temp
+
+        return result
+        
+    def __str__(self):
+        return self.colour + " qn"
 
 class King(Piece):
-    def __init__(self, grid, colour, pieceType, x, y):
-        Piece.__init__(self,grid, colour, pieceType, x, y)
+    def __init__(self,board,row, col, colour):
+        Piece.__init__(self,board,row,col,colour)
 
-    def isValidMove(self, board, x, y):
-        coord = [0,0]
-        coord[1] = ord(self.coord[0]) - ord('A')
-        coord[0] = 8 - self.coord[1]
+        self.castleLong = True
+        self.castleShort = True
 
-        results = []
+    # returns empty list if king is not in check,
+    # otherwise return list of squares that will block the check
 
-        row = coord[0]
-        col = coord[1]
+    def imageName(self):
+        string = 'models/'
 
-        moves = [[1,0], [1,1], [0,1], [0,-1], [-1,0], [-1,-1], [-1,1], [1,-1]]
+        if self.colour == 'W':
+            string += 'white'
+        else:
+            string += 'black'
+
+        string += 'King'
+        string += '.png'
+        return string
+
+    def getMoves(self, king, coord = None):
+        temp = None
+        if coord == None:
+            row = self.row
+            col = self.col
+        else:
+            row = coord[0]
+            col = coord[1]
+            self.board[self.row][self.col] = None
+            temp = self.board[row][col]
+            self.board[row][col] = self
+
+        if (row == None):
+            row = self.row
+
+        if (col == None):
+            col = self.col
+
+        result = []
+        moves = [[1, 1], [1, -1], [-1,1], [-1,-1], [0, 1], [0, -1], [1,0], [-1,0]]
+
+        for move in moves:
+            newRow = row + move[0]
+            newCol = col + move[1]
+
+            if not (self.validCoord(newRow, newCol)):
+                continue
+
+
+            piece = self.board[newRow][newCol]
+            if piece == None or piece.colour != self.colour:
+
+                # make sure king is not in check here 
+                self.board[newRow][newCol] = self
+                self.board[self.row][self.col] = None
+
+
+
+                if not (self.inCheck(newRow, newCol)):
+                    result.append((newRow, newCol))
+
+                self.board[self.row][self.col] = self
+                self.board[newRow][newCol] = piece
+
+
+
+            # need to make sure no check in this position
+
+        if coord != None:
+            self.board[self.row][self.col] = self
+            self.board[row][col] = temp
+
+
+
+        if self.castleShort:
+            clear = True
+            for i in range(1,3):
+                # check that each square is not a check 
+                if (self.board[self.row][self.col + i] == None):
+                    self.board[self.row][self.col + i] = self
+                    if (self.inCheck(self.row, self.col + i)):
+                        clear = False
+
+                    self.board[self.row][self.col + i] = None
+
+                else:
+                    clear = False
+
+
+            if (clear):
+                result.append((self.row, self.col + 2))
+
+
+        if self.castleLong:
+            clear = True
+            for i in range(1,4):
+                # check that each square is not a check 
+                if (self.board[self.row][self.col - i] == None):
+                    self.board[self.row][self.col - i] = self
+                    if (self.inCheck(self.row, self.col - i)):
+                        clear = False
+
+                    self.board[self.row][self.col - i] = None
+
+                else:
+                    clear = False
+
+
+            if (clear):
+                result.append((self.row, self.col - 2))
+
+            # check long castle
+        return result
+
+    def moveTo(self, newRow, newCol):
+
+        self.board[self.row][self.col] = None
         
-        # castling
+        
+        if self.col - newCol < -1: # castled short
+            self.board[self.row][self.col + 3].moveTo(self.row, self.col + 1)
 
-        for pair in moves:
-            row = coord[0] + pair[0]
-            col = coord[1] + pair[1]
-
-
-            move = [0,0]
-            move[0] = chr(col + ord('A'))
-            move[1] = 8 - row
-            if (row >= 0 and col >= 0 and row < 8 and col < 8):
-                if (board[row][col] == None):    
-                    if x == move[0] and y == move[1]:
-                        return True
-                elif (board[row][col].colour != self.colour):
-                    if x == move[0] and y == move[1]:
-                        return True
-
-        # castling
-
-        row = 7 # white king
-        if self.colour == 'B': # black king
-            row = 0
-
-        if coord[0] == row and coord[1] == 4: # white king
-            if x == 'G': # kingside
-                blocked = False
-                if board[row][5] == None and board[row][6] == None:
-                    return 'kingCastle'
-
-            if x == 'C': # queenside
-                if board[row][1] == None and board[row][2] == None and board[row][3] == None:
-                    return 'queenCastle'
+        if self.col - newCol > 1: # castled long
+            self.board[self.row][self.col - 4].moveTo(self.row, self.col - 1)
 
 
+        self.row = newRow
+        self.col = newCol
+        self.board[self.row][self.col] = self
+        
+        self.x = self.col*self.grid + self.grid//2
+        self.y = self.row*self.grid + self.grid//2   
+
+        self.castleShort = False
+        self.castleLong = False
+
+    def __str__(self):
+        return self.colour + " kg"
+
+
+    def inCheck(self, row, col):
+        # check diagonals
+        directions = [[1,1], [-1,-1], [1,-1], [-1,1]]
+        for direction in directions:
+            newRow = row
+            newCol = col
+            n = 0
+            while (True):
+                n += 1
+                newRow += direction[0]
+                newCol += direction[1]
+            
+                if not self.validCoord(newRow, newCol):
+                    break
+
+                piece = self.board[newRow][newCol]
+                if piece != None: # found a piece here
+                    if piece.colour != self.colour: # enemy piece
+                        if isinstance(piece, Bishop) or isinstance(piece, Queen):
+                            return True
+                        if n == 1 and isinstance(piece, King):
+                            return True
+                    break
+
+        # check vertical/horizontal
+        directions = [[0,1], [0,-1], [1,0], [-1,0]]
+        for direction in directions:
+            newRow = row
+            newCol = col
+            n = 0
+            while (True):
+                n += 1
+                newRow += direction[0]
+                newCol += direction[1]
+            
+                if not self.validCoord(newRow, newCol):
+                    break
+
+                piece = self.board[newRow][newCol]
+                if piece != None: # found a piece here
+                    if piece.colour != self.colour: # enemy piece
+                        if isinstance(piece, Rook) or isinstance(piece, Queen):
+                            return True
+                        if n == 1 and isinstance(piece, King):
+                            return True
+
+                    break
+
+        # check for knights
+        directions = [[1,2], [1,-2], [2,1], [2,-1], [-1,-2], [-2,-1], [-1,2], [-2,1]]
+        for direction in directions:
+            newRow = row + direction[0]
+            newCol = col + direction[1]
+            
+
+            if not self.validCoord(newRow, newCol):
+                continue
+            
+            piece = self.board[newRow][newCol]
+
+
+            if piece != None and piece.colour != self.colour and isinstance(piece, Knight):
+                return True
+
+
+        # check for pawns 
+        directions = [[-1,1], [-1,-1]] #white
+
+        if self.colour == 'B': #black
+            directions = [[1,1],[1,-1]]
+        
+        for direction in directions:
+            newRow = row + direction[0]
+            newCol = col + direction[1]
+
+        
+            if not self.validCoord(newRow, newCol):
+                continue
+
+            piece = self.board[newRow][newCol]
+
+            if piece != None and piece.colour != self.colour and isinstance(piece, Pawn):
+                return True
+
+        # pass all checks return true 
         return False
