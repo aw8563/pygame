@@ -8,7 +8,7 @@ from pygame.locals import *
 LR = 1e-3
 goal_steps = 300
 score_requirement = 100
-initial_games = 5000
+initial_games = 500
 g = game(100)
 
 black = (0,0,0)
@@ -139,8 +139,14 @@ def create_dummy_model(training_data):
  
 def create_neural_network_model(input_size, output_size):
     network = input_data(shape=[None, input_size, 1], name='input')
+    
     network = tflearn.fully_connected(network, 32)
+    network = tflearn.fully_connected(network, 64)
+    network = tflearn.fully_connected(network, 128)
+    network = tflearn.fully_connected(network, 64)
     network = tflearn.fully_connected(network, 32)
+
+
     network = fully_connected(network, output_size, activation='softmax')
     network = regression(network, name='targets')
     model = tflearn.DNN(network, tensorboard_dir='tflearn_logs')
@@ -153,7 +159,7 @@ def train_model(training_data, model=False):
     X = x.reshape(-1, shape_second_parameter, 1)
     y = [i[1] for i in training_data]
  
-    model.fit({'input': X}, {'targets': y}, n_epoch=10, batch_size=16, show_metric=True)
+    model.fit({'input': X}, {'targets': y}, n_epoch=3, batch_size=16, show_metric=True)
     model.save('miniskake_trained.tflearn')
  
     return model
@@ -220,8 +226,6 @@ def evaluate(model):
 
 if __name__ == "__main__":
 
-
-
     print("ALL IMPORTS DONE")
     print("Press 1 to play")
     print("Press 2 to train AI")
@@ -260,6 +264,7 @@ if __name__ == "__main__":
         from tflearn.layers.estimator import regression
         from statistics import median, mean
         from collections import Counter
+        import tensorflow as tf
         import numpy as np
 
         print("START TRAINING....")

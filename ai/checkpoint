@@ -1,0 +1,2 @@
+model_checkpoint_path: "/mnt/c/Users/Amdy/Desktop/code/pygame/ai/trainedModel.tflearn"
+all_model_checkpoint_paths: "/mnt/c/Users/Amdy/Desktop/code/pygame/ai/trainedModel.tflearn"

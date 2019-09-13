@@ -54,7 +54,7 @@ if __name__ == '__main__':
 
             nMines = input("Please enter number of mines: ")
             while (int(nMines) >= int(width)*int(height)):
-                nMines = input("Too many mines please less than " + str(int(width)*int(height)) + ": ")
+                nMines = input("Too many mines please enter less than " + str(int(width)*int(height)) + ": ")
 
             break
 
@@ -74,21 +74,14 @@ if __name__ == '__main__':
     game.resetGame()
 
     while(game.running):
-        # print(currentPlayer)
-        # x = random.randint(0,29)
-        # y = random.randint(0,29)
 
-        # game.boardState[x][y].revealed = True
-        # x = random.randint(0,29)
-        # y = random.randint(0,29)
-        # game.boardState[x][y].flagged = True
         keys = pygame.key.get_pressed()
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 game.running = False
-
+                
             game.runGame(event)
-
+            
 
         if keys[pygame.K_q]:
             game.running = False
