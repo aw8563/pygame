@@ -69,6 +69,7 @@ class Piece():
 
 
     def move(self, direction, currentBlocks, alternate):
+
         if (direction == 'space'):
             depth = 0
             found = False
@@ -93,6 +94,8 @@ class Piece():
                     # print(self.body[0].y,self.body[0].x)
                     for b in self.body:
                         currentBlocks[(b.y - grid)//grid][b.x//grid] = self.body[0].colour
+
+
 
                     return False
 
@@ -190,7 +193,7 @@ class Block():
         self.x = x
         self.y = y
         self.colour = colour
-
+        self.wait = 0
 
     def drawBlock(self, window):
         rectangle = (self.x + 2, self.y + 2, grid - 3, grid - 3)
