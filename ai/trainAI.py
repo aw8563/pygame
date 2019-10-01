@@ -5,7 +5,6 @@ from tflearn.layers.core import input_data, dropout, fully_connected
 from tflearn.layers.estimator import regression
 from statistics import median, mean
 from collections import Counter
-import tensorflow as tf
 import numpy as np
 
 
@@ -50,7 +49,7 @@ def randomGames(nGames):
         print("GAME: " + str(g + 1) + " SCORE: " + str(game.score))
 
 def initialPopulation(nGames, model = False):
-    
+    print("COLLECTING TRAINING DATA...")
     trainingData = []
     scores = []
     acceptedScores = []
@@ -122,7 +121,7 @@ def neuralNetworkModel(inputSize):
     return model
 
 def trainModel(trainingData, model = False):
-
+    print("TRAINING...")
     shape_second_parameter = len(trainingData[0][0]) # [0][0] = observations
     x = np.array([i[0] for i in trainingData]).reshape(-1, shape_second_parameter, 1)
     y = [i[1] for i in trainingData]
@@ -131,7 +130,7 @@ def trainModel(trainingData, model = False):
     if not model: # if we don't have a model, build one off training data
         model = neuralNetworkModel(len(x[0]))
     else:
-        print("existing model")
+        print("using existing model")
 
     model.fit({'input': x}, {'targets': y}, n_epoch = 3, snapshot_step = 500, show_metric = True, run_id = 'openaistuff')
     model.save(modelName)
@@ -176,5 +175,5 @@ def evaluate(model, nGames):
 
 
 if __name__ == '__main__':
-    print("BEGIN TRAINING") 
+    print("START")
     main()
