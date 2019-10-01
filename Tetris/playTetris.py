@@ -1,7 +1,7 @@
 from tetris import Game as game
 import pygame
 
-g = game(0)
+g = game(15)
 
 g.resetGame()
 

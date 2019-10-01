@@ -240,6 +240,7 @@ class Block():
 class Game():
     def __init__(self, gameSpeed):
         self.gameSpeed = gameSpeed
+        self.clock = pygame.time.Clock()
         os.environ['SDL_AUDIODRIVER'] = 'dummy'
         pygame.init()
 
@@ -332,7 +333,7 @@ class Game():
         #   pygame.time.delay(100)
 
         pygame.display.update()
-        pygame.time.delay(100 - self.gameSpeed)
+        self.clock.tick(self.gameSpeed)
 
     def resetGame(self):
         self.window = pygame.display.set_mode((screenWidth, screenHeight))
